@@ -485,7 +485,8 @@ function RegScreen({ ctx }) {
 
 function RegDoneScreen({ ctx, params }) {
   return (
-    <div style={{ paddingTop: 34 }}>
+    <>
+      <BackChip label="На главный экран" onClick={() => ctx.nav("start", {}, true)} />
       <ResultCard tone="ok" status="Верификация пройдена"
         title={`${params.fam || "Иванов"} ${params.name || "Александр"}`}
         sub={`Лицевой счёт ${params.ls || "1234567"} подтверждён управляющей компанией`} />
@@ -493,7 +494,7 @@ function RegDoneScreen({ ctx, params }) {
       <Btn kind="soft" style={{ marginTop: 9 }} onClick={() => ctx.loginAs("owner", "userAdd")}>
         <Ic.userAdd c="var(--accent)" style={{ width: 18, height: 18 }} /> Добавить пользователей
       </Btn>
-    </div>
+    </>
   );
 }
 
@@ -1147,6 +1148,21 @@ export default function PropuskaDemo() {
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToastMsg(null), 1900);
   }, []);
+
+  /* --- родная кнопка «Назад» Telegram --- */
+  useEffect(() => {
+    const tg = typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp;
+    if (!tg || !tg.BackButton) return;
+    const handler = () => back();
+    tg.BackButton.onClick(handler);
+    return () => tg.BackButton.offClick(handler);
+  }, [back]);
+  useEffect(() => {
+    const tg = typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp;
+    if (!tg || !tg.BackButton) return;
+    if (stack.length > 1) tg.BackButton.show();
+    else tg.BackButton.hide();
+  }, [stack.length]);
 
   /* --- действия --- */
   const loginAs = (r, then) => {
