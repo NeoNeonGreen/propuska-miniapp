@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="format-detection" content="telephone=no">
+<title>Пропуска — Telegram Mini App (демо)</title>
+<!-- Telegram WebApp SDK: обязателен для Mini App -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- React UMD (production) -->
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<style>html,body,#root{margin:0;padding:0;background:#07080a}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// --- Инициализация Telegram Mini App (безопасно работает и в обычном браузере) ---
+(function(){
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) {
+    try {
+      tg.ready();
+      tg.expand();
+      tg.setBackgroundColor('#0c0d10');
+      tg.setHeaderColor('#0c0d10');
+      if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+    } catch(e) {}
+  }
+})();
+</script>
+<script>
+"use strict";
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
+const { useState, useEffect, useRef, useCallback } = React;
+/* ============================================================
+   «Пропуска» — демо Telegram Mini App (без интеграций)
+   Роли: Собственник K0 · Член семьи K1 · Арендатор K2 · Ребёнок K1.2
+   ============================================================ */
+/* ---------------- Дизайн-токены ---------------- */
+const CSS = `
+.pk-root{
+  --bg:#0c0d10; --card:#17181d; --card2:#1f2127; --input:#24262d;
+  --stroke:#2a2d34; --text:#f4f5f7; --t2:#9aa0ab; --t3:#646a76;
+  --accent:#3390ff; --accent-soft:rgba(51,144,255,.13);
+  --green:#34d183; --red:#ff5f5f; --yellow:#f7c64b;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+}
+.pk-root *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+.pk-stage{min-height:100vh;background:radial-gradient(900px 600px at 50% -10%,#12151c 0%,#07080a 65%);
+  display:flex;justify-content:center;padding:0}
+@media(min-width:560px){.pk-stage{padding:28px 0;align-items:center}}
+.pk-phone{width:100%;max-width:400px;background:var(--bg);display:flex;flex-direction:column;
+  position:relative;overflow:hidden;height:100vh}
+@media(min-width:560px){.pk-phone{height:min(830px,calc(100vh - 56px));border-radius:34px;
+  border:1px solid #23262c;box-shadow:0 32px 90px rgba(0,0,0,.75),0 0 0 7px #0d0e11}}
+.pk-status{display:flex;justify-content:space-between;padding:11px 20px 2px;
+  font-size:13px;font-weight:600;flex-shrink:0}
+.pk-status span:last-child{color:var(--t2);font-size:11px;letter-spacing:2px}
+.pk-tgbar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;flex-shrink:0}
+.pk-chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);
+  border:1px solid var(--stroke);border-radius:999px;padding:6px 12px;font-size:13px;
+  color:var(--t2);cursor:pointer;user-select:none;border:none;font-family:inherit}
+.pk-chip:active{opacity:.65}
+.pk-screen{flex:1;overflow-y:auto;padding:6px 16px 100px;scrollbar-width:none}
+.pk-screen::-webkit-scrollbar{display:none}
+.pk-screen.bare{padding-bottom:28px}
+.pk-fade{animation:pkF .22s ease}
+@keyframes pkF{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+h1.pk{font-size:22px;font-weight:700;letter-spacing:-.3px;margin:10px 2px 14px}
+.pk-sub{color:var(--t2);font-size:13px;line-height:1.5}
+.pk-eyebrow{font-size:11.5px;color:var(--t3);text-transform:none}
+
+.pk-card{background:var(--card);border:1px solid #22242a;border-radius:15px;padding:14px;margin-bottom:12px}
+.pk-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:11px}
+.pk-head h2{font-size:16px;font-weight:650}
+.pk-meta{font-size:12px;color:var(--t2)}
+.pk-meta b{color:var(--text)}
+.pk-row2{display:flex;gap:10px}.pk-row2>*{flex:1;min-width:0}
+
+.pk-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
+  border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:14px;
+  font-weight:600;padding:12px 16px;color:#fff;background:var(--accent);
+  transition:transform .06s,opacity .15s}
+.pk-btn:active{transform:scale(.985)}
+.pk-btn.sm{padding:8px 12px;font-size:13px;border-radius:10px}
+.pk-btn.ghost{background:var(--card2);color:var(--text)}
+.pk-btn.soft{background:var(--accent-soft);color:var(--accent)}
+.pk-btn.danger{background:rgba(255,95,95,.12);color:var(--red)}
+.pk-btn:disabled{background:var(--card2);color:var(--t3);cursor:default;transform:none}
+.pk-btn.auto{width:auto}
+
+.pk-opt{background:var(--card2);border-radius:12px;padding:12px;display:flex;
+  flex-direction:column;gap:9px}
+.pk-opt .lbl{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.pk-opt .lbl svg{width:18px;height:18px;flex-shrink:0}
+.pk-opt .note{font-size:11px;color:var(--t3);margin-top:-3px}
+
+.pk-seg{display:flex;background:var(--card);border:1px solid #22242a;border-radius:12px;
+  padding:4px;margin-bottom:14px}
+.pk-seg button{flex:1;border:none;background:none;color:var(--t2);font-family:inherit;
+  font-size:13px;font-weight:600;padding:9px 6px;border-radius:9px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px}
+.pk-seg button.on{background:var(--input);color:var(--text)}
+.pk-cnt{background:var(--accent);color:#fff;border-radius:8px;font-size:10px;font-weight:700;
+  min-width:17px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
+
+.pk-field{margin-bottom:10px;position:relative}
+.pk-label{display:block;font-size:12px;color:var(--t3);margin:2px 2px 6px}
+.pk-input{width:100%;background:var(--input);border:1px solid transparent;border-radius:11px;
+  padding:12px 13px;color:var(--text);font-family:inherit;font-size:14px;outline:none;
+  transition:border-color .15s;appearance:none}
+.pk-input::placeholder{color:var(--t3)}
+.pk-input:focus{border-color:var(--accent)}
+.pk-input.err{border-color:var(--red)}
+.pk-input:disabled{color:var(--t2)}
+select.pk-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa0ab' stroke-width='2.4'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+.pk-err{color:var(--red);font-size:11.5px;margin:2px 2px 8px;line-height:1.4}
+.pk-lock{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none}
+
+.pk-check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:7px 2px;
+  font-size:13px;color:var(--t2);user-select:none}
+.pk-check .bx{width:20px;height:20px;border-radius:6px;flex-shrink:0;margin-top:1px;
+  border:1.5px solid var(--stroke);display:flex;align-items:center;justify-content:center;
+  transition:all .13s}
+.pk-check.on .bx{background:var(--accent);border-color:var(--accent)}
+.pk-check .bx svg{opacity:0}
+.pk-check.on .bx svg{opacity:1}
+.pk-check b{color:var(--text);font-weight:600}
+.pk-check a{color:var(--accent);text-decoration:none}
+
+.pk-switch{position:relative;width:46px;height:27px;flex-shrink:0;cursor:pointer;
+  background:var(--input);border-radius:999px;border:none;transition:background .18s}
+.pk-switch::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;
+  background:#fff;border-radius:50%;transition:transform .18s;box-shadow:0 2px 5px rgba(0,0,0,.4)}
+.pk-switch.on{background:var(--accent)}
+.pk-switch.on::after{transform:translateX(19px)}
+
+.pk-item{background:var(--card);border:1px solid #22242a;border-radius:15px;
+  padding:12px 13px;margin-bottom:10px}
+.pk-item.tap{cursor:pointer}
+.pk-item.tap:active{border-color:var(--accent)}
+.pk-top{display:flex;align-items:center;gap:11px}
+.pk-av{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;font-size:14px;font-weight:700;color:#fff;position:relative}
+.pk-av .n{position:absolute;top:-4px;left:-4px;background:var(--accent);font-size:10px;
+  font-weight:700;min-width:17px;height:17px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;border:2px solid var(--card);padding:0 3px}
+.pk-info{flex:1;min-width:0}
+.pk-info .r{font-size:11px;color:var(--t3)}
+.pk-info .nm{font-size:14px;font-weight:600;margin:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk-info .ph{font-size:12px;color:var(--t2)}
+.pk-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.pk-ls{font-size:11px;color:var(--t3)}
+.pk-acts{display:flex;gap:8px;margin-top:11px}
+
+.pk-ico{width:38px;height:38px;border-radius:11px;background:var(--card2);display:flex;
+  align-items:center;justify-content:center;flex-shrink:0}
+.pk-ico svg{width:19px;height:19px}
+
+.pk-st{font-size:12px;font-weight:600;margin-top:2px}
+.pk-st.ok{color:var(--green)}.pk-st.no{color:var(--red)}.pk-st.wait{color:var(--yellow)}
+.pk-hdate{font-size:12px;color:var(--t3);margin:14px 4px 8px;font-weight:600}
+
+.pk-banner{background:var(--card);border:1px solid #22242a;border-radius:14px;padding:12px 13px;
+  margin-bottom:12px;display:flex;gap:10px;align-items:flex-start;font-size:12.5px;
+  color:var(--t2);line-height:1.5}
+.pk-banner svg{width:18px;height:18px;flex-shrink:0;margin-top:1px}
+.pk-banner b{color:var(--text)}
+.pk-banner.warn{border-color:rgba(247,198,75,.28)}
+.pk-banner.bad{border-color:rgba(255,95,95,.3)}
+
+.pk-rc{background:var(--card);border:1px solid #22242a;border-radius:15px;padding:16px;margin-bottom:14px}
+.pk-rc .tp{display:flex;gap:12px;align-items:flex-start}
+.pk-rc .ic{width:42px;height:42px;border-radius:12px;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;background:var(--accent-soft)}
+.pk-rc .ic svg{width:21px;height:21px}
+.pk-rc .stt{font-size:12px;font-weight:650;margin-bottom:2px}
+.pk-rc .ttl{font-size:15px;font-weight:700}
+.pk-rc .sb{font-size:12.5px;color:var(--t2);margin-top:3px;line-height:1.45}
+.pk-code{margin-top:14px;background:var(--accent);border:none;border-radius:11px;width:100%;
+  padding:11px;color:#fff;font-family:inherit;font-size:17px;font-weight:700;letter-spacing:4px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.pk-code svg{width:16px;height:16px}
+
+.pk-tabbar{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-around;
+  padding:8px 8px 14px;background:rgba(15,16,19,.93);backdrop-filter:blur(18px);
+  border-top:1px solid #1b1d22}
+.pk-tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;
+  color:var(--t3);cursor:pointer;padding:6px 13px;border-radius:12px;position:relative;
+  border:none;background:none;font-family:inherit}
+.pk-tab svg{width:22px;height:22px}
+.pk-tab.on{color:var(--accent);background:var(--accent-soft)}
+.pk-tab .bdg{position:absolute;top:-1px;right:5px;background:var(--accent);color:#fff;
+  font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;
+  align-items:center;justify-content:center;padding:0 4px}
+
+.pk-toast{position:absolute;left:50%;bottom:98px;transform:translateX(-50%) translateY(14px);
+  background:#2b2d33;color:var(--text);font-size:13px;font-weight:500;padding:10px 18px;
+  border-radius:999px;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap;
+  z-index:60;box-shadow:0 8px 26px rgba(0,0,0,.55)}
+.pk-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.pk-logo{width:64px;height:64px;border-radius:19px;margin:0 auto 18px;
+  background:linear-gradient(135deg,#3390ff,#1e63d6);display:flex;align-items:center;
+  justify-content:center;box-shadow:0 14px 34px rgba(51,144,255,.32)}
+.pk-logo svg{width:32px;height:32px}
+.pk-role{background:var(--card);border:1px solid #22242a;border-radius:15px;padding:13px 14px;
+  margin-bottom:9px;cursor:pointer;display:flex;align-items:center;gap:12px;width:100%;
+  font-family:inherit;text-align:left;transition:border-color .15s;color:var(--text)}
+.pk-role:active{border-color:var(--accent)}
+.pk-role .ic{width:38px;height:38px;border-radius:11px;background:var(--accent-soft);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pk-role .ic svg{width:19px;height:19px}
+.pk-role .n{font-size:14px;font-weight:600}
+.pk-role .n span{color:var(--t3);font-weight:500}
+.pk-role .d{font-size:11.5px;color:var(--t3);margin-top:2px;line-height:1.4}
+.pk-note{text-align:center;font-size:11px;color:var(--t3);margin-top:18px;line-height:1.5}
+
+.pk-spin{width:34px;height:34px;border-radius:50%;margin:90px auto 20px;
+  border:3px solid var(--card2);border-top-color:var(--accent);animation:pkSp .8s linear infinite}
+@keyframes pkSp{to{transform:rotate(360deg)}}
+.pk-dots{display:flex;gap:6px;justify-content:center;margin:2px 0 14px}
+.pk-dots i{width:6px;height:6px;border-radius:50%;background:var(--card2)}
+.pk-dots i.on{background:var(--accent)}
+.pk-hr{height:1px;background:#22242a;margin:14px 0}
+.pk-empty{text-align:center;color:var(--t3);font-size:13px;padding:52px 24px;line-height:1.6}
+.pk-empty svg{width:34px;height:34px;margin-bottom:10px}
+.pk-payrow{display:flex;justify-content:space-between;align-items:center;padding:10px 2px 6px;
+  font-size:13px;color:var(--t2)}
+.pk-payrow b{font-size:16px;color:var(--text);font-weight:700}
+.pk-notif{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid #22242a;
+  border-radius:12px;padding:11px 13px;margin-bottom:9px;font-size:13px}
+.pk-notif .g{flex:1;color:var(--t2)}
+`;
+/* ---------------- Иконки ---------------- */
+const Svg = ({ d, c = "currentColor", w = 1.8, style, children }) => (React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: c, strokeWidth: w, strokeLinecap: "round", strokeLinejoin: "round", style: style }, d ? React.createElement("path", { d: d }) : children));
+const Ic = {
+    house: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("path", { d: "m4 11 8-7 8 7M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" }),
+        React.createElement("path", { d: "M10 20v-6h4v6" })),
+    pass: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("rect", { x: "3", y: "5", width: "18", height: "14", rx: "3" }),
+        React.createElement("path", { d: "M3 10h18M7 15h4" })),
+    users: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("circle", { cx: "9", cy: "8", r: "3.2" }),
+        React.createElement("path", { d: "M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5M16 5.5a3 3 0 0 1 0 5.4M17.5 14.7c2 .6 3.1 1.9 3.5 4.3" })),
+    hist: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("rect", { x: "4", y: "3.5", width: "16", height: "17", rx: "3" }),
+        React.createElement("path", { d: "M8 8h8M8 12h8M8 16h5" })),
+    acc: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("circle", { cx: "12", cy: "12", r: "8.5" }),
+        React.createElement("circle", { cx: "12", cy: "10", r: "3" }),
+        React.createElement("path", { d: "M6.5 18.4c1-2.6 3-3.9 5.5-3.9s4.5 1.3 5.5 3.9" })),
+    walk: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("circle", { cx: "13", cy: "4.5", r: "1.7" }),
+        React.createElement("path", { d: "M13 7.5 10 9l-1.5 4M13 7.5l2 3 3 1M13 7.5l-1 5.5 2.5 3 .8 4M11.5 14.5 9 17l-1.5 3.5" })),
+    car: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("path", { d: "M5 13 6.6 8.4A2 2 0 0 1 8.5 7h7a2 2 0 0 1 1.9 1.4L19 13M5 13h14a1.5 1.5 0 0 1 1.5 1.5V17a1 1 0 0 1-1 1H19M5 13a1.5 1.5 0 0 0-1.5 1.5V17a1 1 0 0 0 1 1H6" }),
+        React.createElement("circle", { cx: "7.5", cy: "17.5", r: "1.5" }),
+        React.createElement("circle", { cx: "16.5", cy: "17.5", r: "1.5" })),
+    truck: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("path", { d: "M3 7h10v9H3zM13 10h4l3 3v3h-7" }),
+        React.createElement("circle", { cx: "7", cy: "17.5", r: "1.5" }),
+        React.createElement("circle", { cx: "16.5", cy: "17.5", r: "1.5" })),
+    clock: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("circle", { cx: "12", cy: "12", r: "8.5" }),
+        React.createElement("path", { d: "M12 7.5V12l3 2" })),
+    cardIc: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("rect", { x: "3", y: "5.5", width: "18", height: "13", rx: "2.5" }),
+        React.createElement("path", { d: "M3 10h18" })),
+    copy: (p) => React.createElement(Svg, Object.assign({ w: 2 }, p),
+        React.createElement("rect", { x: "9", y: "9", width: "11", height: "11", rx: "2" }),
+        React.createElement("path", { d: "M5 15V6a2 2 0 0 1 2-2h9" })),
+    info: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("circle", { cx: "12", cy: "12", r: "8.5" }),
+        React.createElement("path", { d: "M12 11v5M12 7.8v.4" })),
+    warn: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("path", { d: "M12 4 2.8 20h18.4L12 4z" }),
+        React.createElement("path", { d: "M12 10v4.5M12 17.4v.4" })),
+    ok: (p) => React.createElement(Svg, Object.assign({ w: 2.4, d: "m5 13 4.2 4L19 7.5" }, p)),
+    x: (p) => React.createElement(Svg, Object.assign({ w: 2.2, d: "M6 6l12 12M18 6 6 18" }, p)),
+    chev: (p) => React.createElement(Svg, Object.assign({ w: 2, d: "m9 6 6 6-6 6" }, p)),
+    back: (p) => React.createElement(Svg, Object.assign({ w: 2.2, d: "M15 6l-6 6 6 6" }, p)),
+    edit: (p) => React.createElement(Svg, Object.assign({ d: "M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17z" }, p)),
+    trash: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("path", { d: "M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l1 12.2a1.5 1.5 0 0 0 1.5 1.3h6a1.5 1.5 0 0 0 1.5-1.3l1-12.2" })),
+    lock: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("rect", { x: "5", y: "10.5", width: "14", height: "9", rx: "2" }),
+        React.createElement("path", { d: "M8 10.5V8a4 4 0 0 1 8 0v2.5" })),
+    userAdd: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("circle", { cx: "10", cy: "8", r: "3.2" }),
+        React.createElement("path", { d: "M4 19c.7-3 2.9-4.5 6-4.5s5.3 1.5 6 4.5M18 6v6M21 9h-6" })),
+    plus: (p) => React.createElement(Svg, Object.assign({ w: 2.2, d: "M12 5v14M5 12h14" }, p)),
+    out: (p) => React.createElement(Svg, Object.assign({}, p),
+        React.createElement("path", { d: "M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3M15 8l4 4-4 4M19 12H9" })),
+};
+/* ---------------- Константы и утилиты ---------------- */
+const ROLES = {
+    owner: { label: "Собственник", tag: "K0" },
+    family: { label: "Член семьи", tag: "K1" },
+    renter: { label: "Арендатор", tag: "K2" },
+    child: { label: "Ребёнок", tag: "K1.2" },
+};
+const NAMES = {
+    owner: "Александр Иванов", family: "Мария Иванова",
+    renter: "Пётр Сидоров", child: "Кирилл Иванов",
+};
+const USER_LIMIT = 5;
+const CARGO_PRICE = 1500;
+const CAR_MARKS = ["Lada", "Hyundai", "Kia", "Toyota", "Skoda", "Volkswagen", "BMW", "Mercedes-Benz", "Geely", "Haval", "Другая"];
+const TRUCK_MARKS = ["КамАЗ", "ГАЗель", "MAN", "Volvo", "Scania", "Другая"];
+const AV = ["#3b6fd1", "#7a5bd6", "#2f9e8f", "#c46a3c", "#b04a8c", "#4f8f4a"];
+const avColor = (i) => AV[Math.abs(i) % AV.length];
+const initials = (n) => n.split(" ").map((w) => w[0]).slice(0, 2).join("");
+const ruName = (s) => /^[А-ЯЁа-яё][А-ЯЁа-яё-]{1,}$/.test(s.trim());
+const plateOk = (s) => /^[АВЕКМНОРСТУХавекмнорстух]\d{3}[АВЕКМНОРСТУХавекмнорстух]{2}\d{2,3}$/.test(s.trim());
+const phoneOk = (s) => s.replace(/\D/g, "").length === 11;
+const money = (n) => n.toLocaleString("ru-RU") + " ₽";
+// коды по ТЗ: разовые/временные — первая цифра 1–7, грузовые — 8–9
+const genCode = (kind) => {
+    const first = kind === "cargo" ? 8 + Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * 7);
+    return first + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+};
+const KIND_ICON = { ped: Ic.walk, auto: Ic.car, cargo: Ic.truck, temp: Ic.clock };
+const KIND_NAME = { ped: "Пешеходный", auto: "Автомобильный", temp: "Временный" };
+const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0") + ":00");
+let _id = 500;
+const nextId = () => ++_id;
+/* ---------------- Начальные данные (моки) ---------------- */
+const seedUsers = [
+    { id: 1, role: "Член семьи", name: "Мария Иванова", phone: "+7 (999) 111-22-33", ls: "1234567", on: true, req: 2 },
+    { id: 2, role: "Арендатор", name: "Пётр Сидоров", phone: "+7 (999) 444-55-66", ls: "1234567", on: true, req: 1 },
+    { id: 3, role: "Ребёнок", name: "Кирилл Иванов", phone: "+7 (999) 777-88-99", ls: "1234567", on: false, req: 0 },
+];
+const seedRequests = [
+    { id: 101, who: "Мария Иванова", role: "Член семьи", kind: "ped", subject: "Смирнов Олег Петрович", status: "pending" },
+    { id: 102, who: "Пётр Сидоров", role: "Арендатор", kind: "auto", subject: "Skoda А111БВ 000", status: "pending" },
+];
+const seedHistory = [
+    { id: 1, date: "Вчера", kind: "auto", title: "Разовый автомобильный", sub: "Hyundai А123БВ 777", code: "4821", st: "ok", stTxt: "Активен · до 18:40" },
+    { id: 2, date: "Вчера", kind: "ped", title: "Разовый пешеходный", sub: "Иванов Иван Иванович", code: "2314", st: "ok", stTxt: "Использован" },
+    { id: 3, date: "20 июня", kind: "cargo", title: "Грузовой пропуск", sub: "КамАЗ В555ХУ 178", code: "8567", st: "ok", stTxt: "Оплачен · 1 500 ₽" },
+    { id: 4, date: "20 июня", kind: "temp", title: "Временный пропуск", sub: "Пропуск для «Курьер»", code: "7003", st: "no", stTxt: "Истёк" },
+];
+const seedMyReq = [
+    { id: 11, date: "Вчера", kind: "ped", title: "Разовый пешеходный", sub: "Фамилия Имя Отчество", st: "ok", stTxt: "Одобрен" },
+    { id: 12, date: "20 июня", kind: "auto", title: "Разовый автомобильный", sub: "Skoda А111БВ 000", st: "no", stTxt: "Отклонён" },
+];
+/* ============================================================
+   Мелкие UI-компоненты
+   ============================================================ */
+const Btn = (_a) => {
+    var { kind = "", sm, auto, children } = _a, p = __rest(_a, ["kind", "sm", "auto", "children"]);
+    return (React.createElement("button", Object.assign({ className: `pk-btn ${kind} ${sm ? "sm" : ""} ${auto ? "auto" : ""}` }, p), children));
+};
+const Card = ({ children, style }) => React.createElement("div", { className: "pk-card", style: style }, children);
+const Field = ({ children, label }) => (React.createElement("div", { className: "pk-field" },
+    label && React.createElement("label", { className: "pk-label" }, label),
+    children));
+const Input = (_a) => {
+    var { err } = _a, p = __rest(_a, ["err"]);
+    return React.createElement("input", Object.assign({ className: `pk-input ${err ? "err" : ""}` }, p));
+};
+const Select = (_a) => {
+    var { err, options, placeholder } = _a, p = __rest(_a, ["err", "options", "placeholder"]);
+    return (React.createElement("select", Object.assign({ className: `pk-input ${err ? "err" : ""}` }, p),
+        React.createElement("option", { value: "" }, placeholder),
+        options.map((o) => React.createElement("option", { key: o, value: o }, o))));
+};
+const Check = ({ on, onToggle, children }) => (React.createElement("div", { className: `pk-check ${on ? "on" : ""}`, onClick: onToggle },
+    React.createElement("span", { className: "bx" },
+        React.createElement(Ic.ok, { c: "#fff", style: { width: 12, height: 12 } })),
+    React.createElement("span", null, children)));
+const Switch = ({ on, onToggle }) => (React.createElement("button", { className: `pk-switch ${on ? "on" : ""}`, onClick: onToggle, "aria-label": "\u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C" }));
+const Banner = ({ kind = "info", children }) => {
+    const icon = kind === "warn" ? React.createElement(Ic.warn, { c: "var(--yellow)" }) : kind === "bad" ? React.createElement(Ic.x, { c: "var(--red)" }) : React.createElement(Ic.info, { c: "var(--accent)" });
+    return React.createElement("div", { className: `pk-banner ${kind}` },
+        icon,
+        React.createElement("span", null, children));
+};
+const BackChip = ({ onClick, label = "Назад" }) => (React.createElement("div", { style: { margin: "2px 0 10px" } },
+    React.createElement("button", { className: "pk-chip", onClick: onClick },
+        React.createElement(Ic.back, { style: { width: 14, height: 14 } }),
+        " ",
+        label)));
+const Dots = ({ n, at }) => (React.createElement("div", { className: "pk-dots" }, Array.from({ length: n }, (_, i) => React.createElement("i", { key: i, className: i === at ? "on" : "" }))));
+const StatusColor = { ok: "var(--green)", no: "var(--red)", wait: "var(--yellow)" };
+const ResultCard = ({ tone = "ok", status, title, sub, icon, code, onCopy }) => {
+    const IconC = icon || Ic.ok;
+    const bg = tone === "ok" ? "rgba(52,209,131,.13)" : tone === "no" ? "rgba(255,95,95,.12)" : "var(--accent-soft)";
+    const col = tone === "wait" ? "var(--yellow)" : StatusColor[tone] || "var(--accent)";
+    return (React.createElement("div", { className: "pk-rc" },
+        React.createElement("div", { className: "tp" },
+            React.createElement("div", { className: "ic", style: { background: bg } },
+                React.createElement(IconC, { c: col })),
+            React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                React.createElement("div", { className: "stt", style: { color: col } }, status),
+                React.createElement("div", { className: "ttl" }, title),
+                sub && React.createElement("div", { className: "sb" }, sub))),
+        code && (React.createElement("button", { className: "pk-code", onClick: () => onCopy(code) },
+            code,
+            " ",
+            React.createElement(Ic.copy, { c: "#fff" })))));
+};
+/* ============================================================
+   ЭКРАНЫ
+   ============================================================ */
+/* ---------- Старт ---------- */
+function StartScreen({ ctx }) {
+    const roles = [
+        { k: "owner", ic: Ic.house, d: "Полный доступ: все пропуска, одобрение запросов, пользователи" },
+        { k: "family", ic: Ic.users, d: "Разовые и временные пропуска по акцепту собственника" },
+        { k: "renter", ic: Ic.users, d: "Разовые и временные пропуска по акцепту собственника" },
+        { k: "child", ic: Ic.walk, d: "Ограниченный доступ (К1.2), запросы через собственника" },
+    ];
+    return (React.createElement("div", { style: { display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100%", padding: "18px 4px" } },
+        React.createElement("div", { className: "pk-logo" },
+            React.createElement(Ic.house, { c: "#fff" })),
+        React.createElement("h1", { className: "pk", style: { textAlign: "center", margin: "0 0 6px" } }, "\u041F\u0440\u043E\u043F\u0443\u0441\u043A\u0430"),
+        React.createElement("p", { className: "pk-sub", style: { textAlign: "center", marginBottom: 24 } },
+            "\u0417\u0430\u043A\u0430\u0437 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u0432 \u043D\u0430 \u0442\u0435\u0440\u0440\u0438\u0442\u043E\u0440\u0438\u044E \u043F\u043E\u0441\u0451\u043B\u043A\u0430.",
+            React.createElement("br", null),
+            "\u0414\u0435\u043C\u043E-\u0432\u0435\u0440\u0441\u0438\u044F \u2014 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0440\u043E\u043B\u044C \u0434\u043B\u044F \u0432\u0445\u043E\u0434\u0430."),
+        roles.map((r) => (React.createElement("button", { key: r.k, className: "pk-role", onClick: () => ctx.loginAs(r.k) },
+            React.createElement("span", { className: "ic" },
+                React.createElement(r.ic, { c: "var(--accent)" })),
+            React.createElement("span", { style: { flex: 1 } },
+                React.createElement("div", { className: "n" },
+                    ROLES[r.k].label,
+                    " ",
+                    React.createElement("span", null,
+                        "\u00B7 ",
+                        ROLES[r.k].tag)),
+                React.createElement("div", { className: "d" }, r.d)),
+            React.createElement(Ic.chev, { c: "var(--t3)", style: { width: 16, height: 16 } })))),
+        React.createElement(Btn, { kind: "ghost", style: { marginTop: 8 }, onClick: () => ctx.nav("reg") }, "\u041F\u0440\u043E\u0439\u0442\u0438 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044E (\u0434\u0435\u043C\u043E)"),
+        React.createElement("div", { className: "pk-note" },
+            "\u0414\u0435\u043C\u043E-\u043F\u0440\u043E\u0442\u043E\u0442\u0438\u043F \u00B7 \u0434\u0430\u043D\u043D\u044B\u0435 \u043D\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F",
+            React.createElement("br", null),
+            "\u0418\u043D\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438 1\u0421 / SIGUR / \u042EKassa \u0438\u043C\u0438\u0442\u0438\u0440\u0443\u044E\u0442\u0441\u044F")));
+}
+/* ---------- Регистрация (Форма №1, 3 шага) ---------- */
+function RegScreen({ ctx }) {
+    const [step, setStep] = useState(0);
+    const [f, setF] = useState({ ls: "", fam: "", name: "", otch: "", noOtch: false, ser: "", num: "", phone: "+7 ", agree: [false, false, false] });
+    const [errs, setErrs] = useState({});
+    const [loading, setLoading] = useState(false);
+    const set = (k, val) => setF((s) => (Object.assign(Object.assign({}, s), { [k]: val })));
+    const next1 = () => {
+        const e = {};
+        if (f.ls.replace(/\D/g, "").length < 6)
+            e.ls = 1;
+        if (!ruName(f.fam))
+            e.fam = 1;
+        if (!ruName(f.name))
+            e.name = 1;
+        if (!f.noOtch && f.otch && !ruName(f.otch))
+            e.otch = 1;
+        setErrs(e);
+        if (!Object.keys(e).length)
+            setStep(1);
+    };
+    const next2 = () => {
+        const e = {};
+        if (f.ser.replace(/\D/g, "").length !== 4)
+            e.ser = 1;
+        if (f.num.replace(/\D/g, "").length !== 6)
+            e.num = 1;
+        if (!phoneOk(f.phone))
+            e.phone = 1;
+        setErrs(e);
+        if (!Object.keys(e).length)
+            setStep(2);
+    };
+    const finish = () => {
+        setLoading(true);
+        setTimeout(() => ctx.nav("regDone", { fam: f.fam, name: f.name, ls: f.ls }, true), 1500);
+    };
+    const allAgree = f.agree.every(Boolean);
+    if (loading)
+        return (React.createElement("div", { style: { textAlign: "center", paddingTop: 40 } },
+            React.createElement("div", { className: "pk-spin" }),
+            React.createElement("p", { className: "pk-sub" },
+                "\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u0435\u043C \u0434\u0430\u043D\u043D\u044B\u0435 \u0432 1\u0421:\u0416\u041A\u0425\u2026",
+                React.createElement("br", null),
+                React.createElement("span", { style: { fontSize: 11, color: "var(--t3)" } }, "(\u0438\u043C\u0438\u0442\u0430\u0446\u0438\u044F \u0432\u0435\u0440\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u0438)"))));
+    const AGREEMENTS = ["Согласие на обработку персональных данных", "Договор оферты КО", "Договор оферты ВС, ВО"];
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: () => (step ? setStep(step - 1) : ctx.back()) }),
+        React.createElement(Card, null,
+            React.createElement("div", { style: { marginBottom: 12 } },
+                React.createElement("div", { className: "pk-eyebrow" },
+                    "\u0424\u043E\u0440\u043C\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438 \u00B7 \u0448\u0430\u0433 ",
+                    step + 1,
+                    " \u0438\u0437 3"),
+                React.createElement("h2", { style: { fontSize: 17, fontWeight: 700, margin: "3px 0 2px" } }, step === 2 ? "Соглашения" : "Заполните все данные"),
+                React.createElement("div", { className: "pk-sub" }, ["Личные данные", "Паспортные данные и телефон", "Примите все соглашения для завершения"][step])),
+            React.createElement(Dots, { n: 3, at: step }),
+            step === 0 && (React.createElement(React.Fragment, null,
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u041D\u043E\u043C\u0435\u0440 \u043B\u0438\u0446\u0435\u0432\u043E\u0433\u043E \u0441\u0447\u0451\u0442\u0430", inputMode: "numeric", maxLength: 7, value: f.ls, err: errs.ls, onChange: (e) => set("ls", e.target.value) })),
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u0424\u0430\u043C\u0438\u043B\u0438\u044F", value: f.fam, err: errs.fam, onChange: (e) => set("fam", e.target.value) })),
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u0418\u043C\u044F", value: f.name, err: errs.name, onChange: (e) => set("name", e.target.value) })),
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u041E\u0442\u0447\u0435\u0441\u0442\u0432\u043E", value: f.otch, err: errs.otch, disabled: f.noOtch, onChange: (e) => set("otch", e.target.value) })),
+                React.createElement(Check, { on: f.noOtch, onToggle: () => set("noOtch", !f.noOtch) }, "\u041D\u0435\u0442 \u043E\u0442\u0447\u0435\u0441\u0442\u0432\u0430"),
+                !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" }, "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043F\u043E\u043B\u044F \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E, \u043D\u0430 \u0440\u0443\u0441\u0441\u043A\u043E\u043C \u044F\u0437\u044B\u043A\u0435. \u041B\u0438\u0446\u0435\u0432\u043E\u0439 \u0441\u0447\u0451\u0442 \u2014 \u043C\u0438\u043D\u0438\u043C\u0443\u043C 6 \u0446\u0438\u0444\u0440."),
+                React.createElement(Btn, { style: { marginTop: 6 }, onClick: next1 }, "\u0414\u0430\u043B\u0435\u0435 \u203A"))),
+            step === 1 && (React.createElement(React.Fragment, null,
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u0421\u0435\u0440\u0438\u044F \u043F\u0430\u0441\u043F\u043E\u0440\u0442\u0430", inputMode: "numeric", maxLength: 4, value: f.ser, err: errs.ser, onChange: (e) => set("ser", e.target.value) })),
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u041D\u043E\u043C\u0435\u0440 \u043F\u0430\u0441\u043F\u043E\u0440\u0442\u0430", inputMode: "numeric", maxLength: 6, value: f.num, err: errs.num, onChange: (e) => set("num", e.target.value) })),
+                React.createElement(Field, null,
+                    React.createElement(Input, { placeholder: "\u041C\u043E\u0431\u0438\u043B\u044C\u043D\u044B\u0439 \u0442\u0435\u043B\u0435\u0444\u043E\u043D", inputMode: "tel", value: f.phone, err: errs.phone, onChange: (e) => set("phone", e.target.value) })),
+                !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" }, "\u0421\u0435\u0440\u0438\u044F \u2014 4 \u0446\u0438\u0444\u0440\u044B, \u043D\u043E\u043C\u0435\u0440 \u2014 6 \u0446\u0438\u0444\u0440, \u0442\u0435\u043B\u0435\u0444\u043E\u043D \u2014 11 \u0446\u0438\u0444\u0440 \u0441 \u043A\u043E\u0434\u043E\u043C \u00AB+7\u00BB."),
+                React.createElement(Btn, { style: { marginTop: 6 }, onClick: next2 }, "\u0414\u0430\u043B\u0435\u0435 \u203A"))),
+            step === 2 && (React.createElement(React.Fragment, null,
+                AGREEMENTS.map((t, i) => (React.createElement(Check, { key: t, on: f.agree[i], onToggle: () => {
+                        const a = [...f.agree];
+                        a[i] = !a[i];
+                        set("agree", a);
+                    } },
+                    React.createElement("b", null, t),
+                    React.createElement("br", null),
+                    "\u041A\u043E\u0440\u043E\u0442\u043A\u0438\u0439 \u0442\u0435\u0437\u0438\u0441 \u043E \u0441\u043E\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0438 \u2014 ",
+                    React.createElement("a", { href: "#", onClick: (e) => e.preventDefault() }, "\u0441\u0441\u044B\u043B\u043A\u0430")))),
+                React.createElement(Btn, { style: { marginTop: 10 }, disabled: !allAgree, onClick: finish }, "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C \u203A"))))));
+}
+function RegDoneScreen({ ctx, params }) {
+    return (React.createElement("div", { style: { paddingTop: 34 } },
+        React.createElement(ResultCard, { tone: "ok", status: "\u0412\u0435\u0440\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u0430", title: `${params.fam || "Иванов"} ${params.name || "Александр"}`, sub: `Лицевой счёт ${params.ls || "1234567"} подтверждён управляющей компанией` }),
+        React.createElement(Btn, { onClick: () => ctx.loginAs("owner") },
+            React.createElement(Ic.pass, { c: "#fff", style: { width: 18, height: 18 } }),
+            " \u041F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u043F\u0440\u043E\u043F\u0443\u0441\u043A"),
+        React.createElement(Btn, { kind: "soft", style: { marginTop: 9 }, onClick: () => ctx.loginAs("owner", "userAdd") },
+            React.createElement(Ic.userAdd, { c: "var(--accent)", style: { width: 18, height: 18 } }),
+            " \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u0435\u0439")));
+}
+/* ---------- Пропуска (главная) ---------- */
+function PassesScreen({ ctx }) {
+    const { role, me, balance, requests } = ctx;
+    const isOwner = role === "owner";
+    const isChild = role === "child";
+    const needAsk = !isOwner; // К1/2 и ребёнок — запрашивают
+    const pending = requests.filter((r) => r.status === "pending");
+    const [tab, setTab] = useState("order");
+    const cargoAvail = Math.floor(balance / CARGO_PRICE);
+    return (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "pk-item tap", onClick: () => ctx.goTab("account") },
+            React.createElement("div", { className: "pk-top" },
+                React.createElement("div", { className: "pk-av", style: { background: avColor(0) } }, initials(me.name)),
+                React.createElement("div", { className: "pk-info" },
+                    React.createElement("div", { className: "r" }, ROLES[role].label),
+                    React.createElement("div", { className: "nm" }, me.name)),
+                React.createElement(Ic.chev, { c: "var(--t3)", style: { width: 16, height: 16 } }))),
+        React.createElement("h1", { className: "pk", style: { marginTop: 16 } }, "\u0417\u0430\u043A\u0430\u0437 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430"),
+        isOwner && (React.createElement("div", { className: "pk-seg" },
+            React.createElement("button", { className: tab === "order" ? "on" : "", onClick: () => setTab("order") }, "\u0417\u0430\u043A\u0430\u0437\u0430\u0442\u044C"),
+            React.createElement("button", { className: tab === "req" ? "on" : "", onClick: () => setTab("req") },
+                "\u0417\u0430\u043F\u0440\u043E\u0441\u044B ",
+                pending.length > 0 && React.createElement("span", { className: "pk-cnt" }, pending.length)))),
+        isOwner && tab === "req" ? (React.createElement(RequestsList, { ctx: ctx, pending: pending })) : (React.createElement(React.Fragment, null,
+            React.createElement(Card, null,
+                React.createElement("div", { className: "pk-head" },
+                    React.createElement("h2", null, "\u0420\u0430\u0437\u043E\u0432\u044B\u0439 \u043F\u0440\u043E\u043F\u0443\u0441\u043A"),
+                    React.createElement("span", { className: "pk-meta" }, "\u0431\u0435\u0441\u043F\u043B\u0430\u0442\u043D\u043E")),
+                React.createElement("div", { className: "pk-row2" },
+                    React.createElement("div", { className: "pk-opt" },
+                        React.createElement("div", { className: "lbl" },
+                            React.createElement(Ic.walk, { c: "var(--t2)" }),
+                            " \u041F\u0435\u0448\u0435\u0445\u043E\u0434\u043D\u044B\u0439"),
+                        React.createElement(Btn, { kind: "soft", sm: true, onClick: () => ctx.nav("formPed") }, needAsk ? "Запросить" : "Оформить")),
+                    React.createElement("div", { className: "pk-opt" },
+                        React.createElement("div", { className: "lbl" },
+                            React.createElement(Ic.car, { c: "var(--t2)" }),
+                            " \u0410\u0432\u0442\u043E\u043C\u043E\u0431\u0438\u043B\u044C"),
+                        React.createElement(Btn, { kind: "soft", sm: true, onClick: () => ctx.nav("formAuto") }, needAsk ? "Запросить" : "Оформить")))),
+            !isChild && (React.createElement(Card, null,
+                React.createElement("div", { className: "pk-head" },
+                    React.createElement("h2", null, "\u0413\u0440\u0443\u0437\u043E\u0432\u043E\u0439 \u043F\u0440\u043E\u043F\u0443\u0441\u043A"),
+                    React.createElement("span", { className: "pk-meta" },
+                        "\u0411\u0430\u043B\u0430\u043D\u0441: ",
+                        React.createElement("b", null, money(balance)))),
+                cargoAvail === 0 && (React.createElement(Banner, { kind: "warn" },
+                    "\u0414\u043B\u044F \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D\u0438\u044F \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430 \u043D\u0430 \u0441\u0447\u0435\u0442\u0443 \u0434\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C \u043D\u0435 \u043C\u0435\u043D\u0435\u0435 ",
+                    React.createElement("b", null, "1 500 \u20BD"))),
+                React.createElement("div", { className: "pk-row2" },
+                    React.createElement("div", { className: "pk-opt" },
+                        React.createElement("div", { className: "lbl" },
+                            React.createElement(Ic.cardIc, { c: "var(--t2)" }),
+                            " \u041F\u043E\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 \u0431\u0430\u043B\u0430\u043D\u0441\u0430"),
+                        React.createElement(Btn, { kind: "soft", sm: true, onClick: () => ctx.nav("topup") }, "\u041F\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u044C")),
+                    React.createElement("div", { className: "pk-opt" },
+                        React.createElement("div", { className: "lbl" },
+                            React.createElement(Ic.truck, { c: "var(--t2)" }),
+                            " \u0410\u0432\u0442\u043E\u043C\u043E\u0431\u0438\u043B\u044C"),
+                        React.createElement("div", { className: "note" },
+                            "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u043E: ",
+                            cargoAvail),
+                        React.createElement(Btn, { sm: true, disabled: !cargoAvail, onClick: () => ctx.nav("formCargo") }, "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C"))))),
+            React.createElement(Card, null,
+                React.createElement("div", { className: "pk-head" },
+                    React.createElement("h2", null, "\u0412\u0440\u0435\u043C\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u043E\u043F\u0443\u0441\u043A")),
+                React.createElement(Btn, { onClick: () => ctx.nav("formTemp") }, isChild ? "Запросить" : "Оформить")),
+            isOwner && (React.createElement(Card, null,
+                React.createElement("div", { className: "pk-head" },
+                    React.createElement("h2", null, "\u041F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u044B\u0439 \u043F\u0440\u043E\u043F\u0443\u0441\u043A")),
+                React.createElement("p", { className: "pk-sub", style: { marginBottom: 10 } }, "\u041E\u0444\u043E\u0440\u043C\u043B\u044F\u0435\u0442\u0441\u044F \u0447\u0435\u0440\u0435\u0437 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043D\u043E\u0432\u043E\u0433\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u2014 \u043F\u043E\u0441\u043B\u0435 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u043E\u043D \u043F\u043E\u043B\u0443\u0447\u0430\u0435\u0442 \u043F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u044B\u0439 \u0434\u043E\u0441\u0442\u0443\u043F."),
+                React.createElement(Btn, { onClick: () => ctx.goTab("usersTab", "userAdd") }, "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C")))))));
+}
+function RequestsList({ ctx, pending }) {
+    if (!pending.length)
+        return (React.createElement("div", { className: "pk-empty" },
+            React.createElement(Ic.ok, { c: "var(--t3)" }),
+            React.createElement("br", null),
+            "\u041D\u043E\u0432\u044B\u0445 \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432 \u043D\u0435\u0442.",
+            React.createElement("br", null),
+            "\u0417\u0434\u0435\u0441\u044C \u043F\u043E\u044F\u0432\u044F\u0442\u0441\u044F \u0437\u0430\u044F\u0432\u043A\u0438 \u043E\u0442 \u0447\u043B\u0435\u043D\u043E\u0432 \u0441\u0435\u043C\u044C\u0438 \u0438 \u0430\u0440\u0435\u043D\u0434\u0430\u0442\u043E\u0440\u043E\u0432."));
+    return (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "pk-eyebrow", style: { margin: "2px 4px 10px" } }, "\u0421\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u0432"),
+        pending.map((r) => {
+            const IconC = KIND_ICON[r.kind];
+            return (React.createElement("div", { className: "pk-item", key: r.id },
+                React.createElement("div", { className: "pk-top" },
+                    React.createElement("div", { className: "pk-ico" },
+                        React.createElement(IconC, { c: "var(--accent)" })),
+                    React.createElement("div", { className: "pk-info" },
+                        React.createElement("div", { className: "nm" },
+                            "\u0417\u0430\u043F\u0440\u043E\u0441 \u043D\u0430 ",
+                            KIND_NAME[r.kind],
+                            " \u043F\u0440\u043E\u043F\u0443\u0441\u043A"),
+                        React.createElement("div", { className: "ph" }, r.subject),
+                        React.createElement("div", { className: "r", style: { marginTop: 2 } },
+                            "\u0417\u0430\u043F\u0440\u0430\u0448\u0438\u0432\u0430\u0435\u0442: ",
+                            r.who,
+                            " \u00B7 ",
+                            r.role))),
+                React.createElement("div", { className: "pk-acts" },
+                    React.createElement(Btn, { sm: true, onClick: () => ctx.decideRequest(r.id, true) }, "\u041E\u0434\u043E\u0431\u0440\u0438\u0442\u044C"),
+                    React.createElement(Btn, { sm: true, kind: "ghost", style: { color: "var(--red)" }, onClick: () => ctx.decideRequest(r.id, false) }, "\u041E\u0442\u043A\u043B\u043E\u043D\u0438\u0442\u044C"))));
+        })));
+}
+function ReqDecidedScreen({ ctx, params }) {
+    const { ok, req } = params;
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(ResultCard, { tone: ok ? "ok" : "no", status: ok ? "Одобрен" : "Отклонён", icon: ok ? Ic.ok : Ic.x, title: req.subject, sub: `${KIND_NAME[req.kind]} пропуск · запросил(а) ${req.who}` }),
+        React.createElement(Btn, { onClick: () => ctx.goTab("passes") }, "\u041D\u0430 \u0433\u043B\u0430\u0432\u043D\u0443\u044E")));
+}
+/* ---------- Формы заказа ---------- */
+function FormPed({ ctx }) {
+    const [f, setF] = useState({ fam: "", name: "", otch: "", noOtch: false });
+    const [errs, setErrs] = useState({});
+    const submit = () => {
+        const e = {};
+        if (!ruName(f.fam))
+            e.fam = 1;
+        if (!ruName(f.name))
+            e.name = 1;
+        if (!f.noOtch && f.otch && !ruName(f.otch))
+            e.otch = 1;
+        setErrs(e);
+        if (Object.keys(e).length)
+            return;
+        const fio = `${f.fam.trim()} ${f.name.trim()}${f.noOtch || !f.otch ? "" : " " + f.otch.trim()}`;
+        ctx.placeOrder({ kind: "ped", title: "Разовый пешеходный пропуск", subject: fio });
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Card, null,
+            React.createElement(FormTitle, { sub: "\u041B\u0438\u0447\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043F\u043E\u0441\u0435\u0442\u0438\u0442\u0435\u043B\u044F" }),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u0424\u0430\u043C\u0438\u043B\u0438\u044F", value: f.fam, err: errs.fam, onChange: (e) => setF(Object.assign(Object.assign({}, f), { fam: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u0418\u043C\u044F", value: f.name, err: errs.name, onChange: (e) => setF(Object.assign(Object.assign({}, f), { name: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041E\u0442\u0447\u0435\u0441\u0442\u0432\u043E", value: f.otch, err: errs.otch, disabled: f.noOtch, onChange: (e) => setF(Object.assign(Object.assign({}, f), { otch: e.target.value })) })),
+            React.createElement(Check, { on: f.noOtch, onToggle: () => setF(Object.assign(Object.assign({}, f), { noOtch: !f.noOtch })) }, "\u041D\u0435\u0442 \u043E\u0442\u0447\u0435\u0441\u0442\u0432\u0430"),
+            !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" }, "\u0424\u0430\u043C\u0438\u043B\u0438\u044F \u0438 \u0438\u043C\u044F \u2014 \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E, \u043D\u0430 \u0440\u0443\u0441\u0441\u043A\u043E\u043C \u044F\u0437\u044B\u043A\u0435."),
+            React.createElement(Btn, { style: { marginTop: 6 }, onClick: submit }, ctx.role === "owner" ? "Оформить" : "Запросить"))));
+}
+function FormAuto({ ctx, cargo = false }) {
+    const [f, setF] = useState({ num: "", mark: "" });
+    const [errs, setErrs] = useState({});
+    const marks = cargo ? TRUCK_MARKS : CAR_MARKS;
+    const submit = () => {
+        const e = {};
+        if (!plateOk(f.num))
+            e.num = 1;
+        if (!f.mark)
+            e.mark = 1;
+        setErrs(e);
+        if (Object.keys(e).length)
+            return;
+        const subject = `${f.mark} ${f.num.toUpperCase()}`;
+        if (cargo) {
+            ctx.placeCargo(subject);
+        }
+        else {
+            ctx.placeOrder({ kind: "auto", title: "Разовый автомобильный пропуск", subject });
+        }
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Card, null,
+            React.createElement(FormTitle, { sub: cargo ? "Грузовое авто" : "Данные авто" }),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041D\u043E\u043C\u0435\u0440 \u0422\u0421, \u0440\u0435\u0433\u0438\u043E\u043D (\u0410123\u0411\u0412777)", maxLength: 9, value: f.num, err: errs.num, onChange: (e) => setF(Object.assign(Object.assign({}, f), { num: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Select, { placeholder: "\u041C\u0430\u0440\u043A\u0430 \u0422\u0421", options: marks, value: f.mark, err: errs.mark, onChange: (e) => setF(Object.assign(Object.assign({}, f), { mark: e.target.value })) })),
+            !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" }, "\u041D\u043E\u043C\u0435\u0440 \u0432 \u0444\u043E\u0440\u043C\u0430\u0442\u0435 \u0410123\u0411\u0412777 (\u043A\u0438\u0440\u0438\u043B\u043B\u0438\u0446\u0430), \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043C\u0430\u0440\u043A\u0443 \u0422\u0421."),
+            cargo && React.createElement("div", { className: "pk-payrow" },
+                React.createElement("span", null, "\u041A \u043E\u043F\u043B\u0430\u0442\u0435 (\u0441\u043F\u0438\u0448\u0435\u0442\u0441\u044F \u0441 \u0434\u0435\u043F\u043E\u0437\u0438\u0442\u0430):"),
+                React.createElement("b", null, money(CARGO_PRICE))),
+            React.createElement(Btn, { style: { marginTop: 6 }, onClick: submit }, cargo || ctx.role === "owner" ? "Оформить" : "Запросить"))));
+}
+function FormTemp({ ctx }) {
+    const isChild = ctx.role === "child";
+    const [f, setF] = useState({ vis: "", comp: "", goal: "", from: "", to: "", auto: "", light: false });
+    const [errs, setErrs] = useState({});
+    const submit = () => {
+        const e = {};
+        if (f.vis.trim().length < 2)
+            e.vis = 1;
+        if (f.goal.trim().length < 2)
+            e.goal = 1;
+        setErrs(e);
+        if (Object.keys(e).length)
+            return;
+        const from = f.from || "08:00", to = f.to || "12:00";
+        ctx.placeOrder({
+            kind: "temp", title: "Временный пропуск",
+            subject: `Пропуск для «${f.vis.trim()}»`,
+            extra: `Активен: с ${from} до ${to}`,
+        });
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Card, null,
+            React.createElement(FormTitle, { h: "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0444\u043E\u0440\u043C\u0443", sub: "\u0412\u0440\u0435\u043C\u0435\u043D\u043D\u044B\u0439 \u043F\u0440\u043E\u043F\u0443\u0441\u043A" }),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041F\u043E\u0441\u0435\u0442\u0438\u0442\u0435\u043B\u044C", value: f.vis, err: errs.vis, onChange: (e) => setF(Object.assign(Object.assign({}, f), { vis: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F", value: f.comp, onChange: (e) => setF(Object.assign(Object.assign({}, f), { comp: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u0426\u0435\u043B\u044C \u043F\u043E\u0441\u0435\u0449\u0435\u043D\u0438\u044F", value: f.goal, err: errs.goal, onChange: (e) => setF(Object.assign(Object.assign({}, f), { goal: e.target.value })) })),
+            React.createElement(Field, { label: "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E\u0439 \u043F\u0435\u0440\u0438\u043E\u0434" },
+                React.createElement("div", { className: "pk-row2" },
+                    React.createElement(Select, { placeholder: "\u0421 00:00", options: HOURS, value: f.from, onChange: (e) => setF(Object.assign(Object.assign({}, f), { from: e.target.value })) }),
+                    React.createElement(Select, { placeholder: "\u0414\u043E 00:00", options: HOURS, value: f.to, onChange: (e) => setF(Object.assign(Object.assign({}, f), { to: e.target.value })) }))),
+            isChild ? (React.createElement(Check, { on: f.light, onToggle: () => setF(Object.assign(Object.assign({}, f), { light: !f.light })) }, "\u041B\u0435\u0433\u043A\u043E\u0432\u043E\u0435 \u0430\u0432\u0442\u043E")) : (React.createElement(Field, null,
+                React.createElement(Select, { placeholder: "\u0410\u0432\u0442\u043E (\u043D\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E)", options: ["Легковое авто", "Грузовое авто"], value: f.auto, onChange: (e) => setF(Object.assign(Object.assign({}, f), { auto: e.target.value })) }))),
+            !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" }, "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u043F\u043E\u0441\u0435\u0442\u0438\u0442\u0435\u043B\u044F \u0438 \u0446\u0435\u043B\u044C \u043F\u043E\u0441\u0435\u0449\u0435\u043D\u0438\u044F."),
+            React.createElement(Btn, { style: { marginTop: 6 }, onClick: submit }, isChild || ctx.role !== "owner" ? "Запросить" : "Оформить"))));
+}
+const FormTitle = ({ h = "Заполните все данные", sub }) => (React.createElement("div", { style: { marginBottom: 12 } },
+    React.createElement("div", { className: "pk-eyebrow" }, "\u0424\u043E\u0440\u043C\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438"),
+    React.createElement("h2", { style: { fontSize: 17, fontWeight: 700, margin: "3px 0 2px" } }, h),
+    sub && React.createElement("div", { className: "pk-sub" }, sub)));
+/* ---------- Результат заказа ---------- */
+function ResultScreen({ ctx, params }) {
+    const { mode, kind, title, subject, code, extra } = params;
+    const sent = mode === "sent";
+    const IconC = sent ? Ic.clock : KIND_ICON[kind] || Ic.ok;
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { label: "\u0412\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0432 \u043C\u0435\u043D\u044E", onClick: () => ctx.goTab("passes") }),
+        React.createElement(ResultCard, { tone: sent ? "wait" : "ok", icon: IconC, status: sent ? "Запрос отправлен" : "Оформлен", title: subject, sub: `${title}${extra ? " · " + extra : ""}${sent ? " — статус запроса можно отслеживать в разделе «История»" : ""}`, code: code, onCopy: ctx.copyCode }),
+        React.createElement(Btn, { onClick: () => ctx.goTab("passes") }, sent ? "Запросить ещё" : "Оформить ещё"),
+        React.createElement(Btn, { kind: "ghost", style: { marginTop: 9 }, onClick: () => ctx.goTab("passes") }, "\u041D\u0430 \u0433\u043B\u0430\u0432\u043D\u0443\u044E")));
+}
+/* ---------- Пополнение и оплата ---------- */
+function TopupScreen({ ctx }) {
+    const [sum, setSum] = useState("");
+    const n = parseInt(sum.replace(/\D/g, ""), 10) || 0;
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Card, null,
+            React.createElement("div", { style: { marginBottom: 12 } },
+                React.createElement("h2", { style: { fontSize: 17, fontWeight: 700, marginBottom: 3 } }, "\u041F\u043E\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 \u0431\u0430\u043B\u0430\u043D\u0441\u0430"),
+                React.createElement("div", { className: "pk-sub" }, "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0441\u0443\u043C\u043C\u0443 \u043F\u043E\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F. \u041C\u0438\u043D\u0438\u043C\u0443\u043C: 1 500 \u20BD")),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "0 \u20BD", inputMode: "numeric", value: sum, onChange: (e) => setSum(e.target.value.replace(/[^\d]/g, "")) })),
+            React.createElement("div", { className: "pk-payrow" },
+                React.createElement("span", null, "\u041A \u043E\u043F\u043B\u0430\u0442\u0435:"),
+                React.createElement("b", null, money(n))),
+            n > 0 && n < 1500 && React.createElement("div", { className: "pk-err" }, "\u041C\u0438\u043D\u0438\u043C\u0430\u043B\u044C\u043D\u0430\u044F \u0441\u0443\u043C\u043C\u0430 \u043F\u043E\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F \u2014 1 500 \u20BD"),
+            React.createElement(Btn, { style: { marginTop: 6 }, disabled: n < 1500, onClick: () => ctx.nav("payment", { sum: n }) }, "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C"))));
+}
+function PaymentScreen({ ctx, params }) {
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Banner, null,
+            React.createElement("b", null, "\u041F\u0440\u043E\u0446\u0435\u0441\u0441 \u043E\u043F\u043B\u0430\u0442\u044B \u043D\u0430 \u0441\u0442\u043E\u0440\u043E\u043D\u0435 \u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430."),
+            React.createElement("br", null),
+            "\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441 \u043F\u043B\u0430\u0442\u0451\u0436\u043D\u043E\u0433\u043E \u043F\u0440\u043E\u0432\u0430\u0439\u0434\u0435\u0440\u0430 \u00AB\u042EKassa\u00BB \u0438\u043C\u0438\u0442\u0438\u0440\u0443\u0435\u0442\u0441\u044F. \u0414\u0435\u043D\u044C\u0433\u0438 \u0437\u0430\u0447\u0438\u0441\u043B\u044F\u044E\u0442\u0441\u044F \u043D\u0430 \u0440\u0430\u0441\u0447\u0451\u0442\u043D\u044B\u0439 \u0441\u0447\u0451\u0442 \u0417\u0430\u043A\u0430\u0437\u0447\u0438\u043A\u0430 \u043F\u043E \u0434\u043E\u0433\u043E\u0432\u043E\u0440\u0443 \u043C\u0435\u0436\u0434\u0443 \u0417\u0430\u043A\u0430\u0437\u0447\u0438\u043A\u043E\u043C \u0438 \u042EKassa."),
+        React.createElement(Card, { style: { textAlign: "center", padding: "24px 16px" } },
+            React.createElement("div", { className: "pk-eyebrow", style: { marginBottom: 6 } }, "\u042EKassa \u00B7 \u0434\u0435\u043C\u043E"),
+            React.createElement("div", { style: { fontSize: 27, fontWeight: 800, letterSpacing: -0.5, marginBottom: 4 } }, money(params.sum)),
+            React.createElement("div", { className: "pk-sub", style: { marginBottom: 16 } }, "\u041F\u043E\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435 \u0434\u0435\u043F\u043E\u0437\u0438\u0442\u0430 \u0433\u0440\u0443\u0437\u043E\u0432\u044B\u0445 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u0432"),
+            React.createElement(Btn, { onClick: () => ctx.paymentDone(params.sum, true) }, "\u041E\u043F\u043B\u0430\u0442\u0438\u0442\u044C"),
+            React.createElement(Btn, { kind: "ghost", style: { marginTop: 9 }, onClick: () => ctx.paymentDone(params.sum, false) }, "\u0418\u043C\u0438\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043E\u0448\u0438\u0431\u043A\u0443 \u043F\u043B\u0430\u0442\u0435\u0436\u0430"))));
+}
+function PayResultScreen({ ctx, params }) {
+    const { ok, sum, balance } = params;
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { label: "\u0412\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0432 \u043C\u0435\u043D\u044E", onClick: () => ctx.goTab("passes") }),
+        React.createElement(ResultCard, { tone: ok ? "ok" : "no", icon: ok ? Ic.ok : Ic.x, status: "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u043F\u043B\u0430\u0442\u0435\u0436\u0430", title: ok ? `Баланс пополнен на ${money(sum)}` : "Платёж не прошёл", sub: ok
+                ? `Текущий баланс: ${money(balance)} · доступно грузовых пропусков: ${Math.floor(balance / CARGO_PRICE)}`
+                : "Деньги не списаны. Попробуйте ещё раз или обратитесь в управляющую компанию." }),
+        ok ? (React.createElement(React.Fragment, null,
+            React.createElement(Btn, { onClick: () => ctx.nav("formCargo") }, "\u041E\u0444\u043E\u0440\u043C\u0438\u0442\u044C \u043F\u0440\u043E\u043F\u0443\u0441\u043A"),
+            React.createElement(Btn, { kind: "ghost", style: { marginTop: 9 }, onClick: () => ctx.goTab("passes") }, "\u041D\u0430 \u0433\u043B\u0430\u0432\u043D\u0443\u044E"))) : (React.createElement(React.Fragment, null,
+            React.createElement(Btn, { onClick: () => ctx.nav("topup") }, "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C"),
+            React.createElement(Btn, { kind: "ghost", style: { marginTop: 9 }, onClick: () => ctx.goTab("passes") }, "\u0412\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0432 \u043C\u0435\u043D\u044E")))));
+}
+/* ---------- История ---------- */
+function HistoryScreen({ ctx }) {
+    const isOwner = ctx.role === "owner";
+    const [tab, setTab] = useState(isOwner ? "hist" : "req");
+    const list = !isOwner && tab === "req" ? ctx.myRequests : ctx.history;
+    let lastDate = null;
+    return (React.createElement(React.Fragment, null,
+        React.createElement("h1", { className: "pk" }, "\u0418\u0441\u0442\u043E\u0440\u0438\u044F"),
+        !isOwner && (React.createElement("div", { className: "pk-seg" },
+            React.createElement("button", { className: tab === "req" ? "on" : "", onClick: () => setTab("req") }, "\u0417\u0430\u043F\u0440\u043E\u0441\u044B"),
+            React.createElement("button", { className: tab === "hist" ? "on" : "", onClick: () => setTab("hist") }, "\u0418\u0441\u0442\u043E\u0440\u0438\u044F"))),
+        !list.length ? (React.createElement("div", { className: "pk-empty" },
+            React.createElement(Ic.hist, { c: "var(--t3)" }),
+            React.createElement("br", null),
+            "\u041F\u043E\u043A\u0430 \u043F\u0443\u0441\u0442\u043E")) : (list.map((h) => {
+            const showDate = h.date !== lastDate;
+            lastDate = h.date;
+            const IconC = KIND_ICON[h.kind];
+            return (React.createElement("div", { key: h.id },
+                showDate && React.createElement("div", { className: "pk-hdate" }, h.date),
+                React.createElement("div", { className: "pk-item" },
+                    React.createElement("div", { className: "pk-top" },
+                        React.createElement("div", { className: "pk-ico" },
+                            React.createElement(IconC, { c: "var(--accent)" })),
+                        React.createElement("div", { className: "pk-info" },
+                            React.createElement("div", { className: "nm", style: { fontSize: 13.5 } }, h.title),
+                            React.createElement("div", { className: "ph" }, h.sub),
+                            React.createElement("div", { className: `pk-st ${h.st}` }, h.stTxt)),
+                        h.code && React.createElement(Btn, { kind: "soft", sm: true, auto: true, onClick: () => ctx.copyCode(h.code) }, h.code)))));
+        }))));
+}
+/* ---------- Пользователи ---------- */
+function UsersScreen({ ctx }) {
+    const { users } = ctx;
+    const [confirmId, setConfirmId] = useState(null);
+    const limitHit = users.length >= USER_LIMIT;
+    useEffect(() => {
+        if (confirmId == null)
+            return;
+        const t = setTimeout(() => setConfirmId(null), 3000);
+        return () => clearTimeout(t);
+    }, [confirmId]);
+    return (React.createElement(React.Fragment, null,
+        React.createElement("h1", { className: "pk" }, "\u0423\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F\u043C\u0438"),
+        limitHit && (React.createElement(Banner, { kind: "warn" },
+            React.createElement("b", null,
+                "\u0412\u044B \u0434\u043E\u0441\u0442\u0438\u0433\u043B\u0438 \u043B\u0438\u043C\u0438\u0442\u0430 (",
+                USER_LIMIT,
+                ")."),
+            React.createElement("br", null),
+            "\u0414\u043B\u044F \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0434\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0445 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u0435\u0439 \u043E\u0431\u0440\u0430\u0442\u0438\u0442\u0435\u0441\u044C \u0432 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0449\u0443\u044E \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u044E.")),
+        React.createElement(Btn, { kind: "soft", style: { marginBottom: 14 }, disabled: limitHit, onClick: () => ctx.nav("userAdd") },
+            React.createElement(Ic.plus, { c: limitHit ? "var(--t3)" : "var(--accent)", style: { width: 16, height: 16 } }),
+            " \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F"),
+        users.map((u) => (React.createElement("div", { className: "pk-item", key: u.id },
+            React.createElement("div", { className: "pk-top" },
+                React.createElement("div", { className: "pk-av", style: { background: avColor(u.id) } },
+                    u.req > 0 && React.createElement("span", { className: "n" }, u.req),
+                    initials(u.name)),
+                React.createElement("div", { className: "pk-info" },
+                    React.createElement("div", { className: "r" }, u.role),
+                    React.createElement("div", { className: "nm" }, u.name),
+                    React.createElement("div", { className: "ph" }, u.phone)),
+                React.createElement("div", { className: "pk-side" },
+                    React.createElement("span", { className: "pk-ls" },
+                        "\u041B/\u0421 ",
+                        u.ls),
+                    React.createElement(Switch, { on: u.on, onToggle: () => ctx.toggleUser(u.id) }))),
+            React.createElement("div", { className: "pk-acts" },
+                React.createElement(Btn, { kind: "soft", sm: true, onClick: () => ctx.toast("Редактирование — запрос уйдёт в УК (демо)") },
+                    React.createElement(Ic.edit, { c: "var(--accent)", style: { width: 14, height: 14 } }),
+                    " \u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C"),
+                React.createElement(Btn, { kind: "danger", sm: true, auto: true, onClick: () => confirmId === u.id ? ctx.removeUser(u.id) : setConfirmId(u.id) },
+                    React.createElement(Ic.trash, { c: "var(--red)", style: { width: 15, height: 15 } }),
+                    confirmId === u.id ? "Точно удалить?" : "Удалить"))))),
+        React.createElement(Banner, null, "\u0422\u0443\u043C\u0431\u043B\u0435\u0440 \u0432\u043A\u043B\u044E\u0447\u0430\u0435\u0442 \u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0430\u0435\u0442 \u043E\u0444\u043E\u0440\u043C\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u0432 \u0443 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u0426\u0438\u0444\u0440\u0430 \u043D\u0430 \u0430\u0432\u0430\u0442\u0430\u0440\u0435 \u2014 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0437\u0430\u043F\u0440\u043E\u0448\u0435\u043D\u043D\u044B\u0445 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u0432.")));
+}
+function UserAddScreen({ ctx }) {
+    const [f, setF] = useState({ phone: "+7 ", role: "", rodstvo: "" });
+    const [errs, setErrs] = useState({});
+    const submit = () => {
+        const e = {};
+        if (!phoneOk(f.phone))
+            e.phone = 1;
+        if (!f.role)
+            e.role = 1;
+        if (f.role === "Член семьи" && f.rodstvo.trim().length < 2)
+            e.rodstvo = 1;
+        setErrs(e);
+        if (Object.keys(e).length)
+            return;
+        ctx.addUser(f);
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Card, null,
+            React.createElement(FormTitle, { sub: "\u041B\u0438\u0447\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u043C\u043E\u0433\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F" }),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041C\u043E\u0431\u0438\u043B\u044C\u043D\u044B\u0439 \u0442\u0435\u043B\u0435\u0444\u043E\u043D", inputMode: "tel", value: f.phone, err: errs.phone, onChange: (e) => setF(Object.assign(Object.assign({}, f), { phone: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Select, { placeholder: "\u0420\u043E\u043B\u044C", options: ["Арендатор", "Член семьи", "Ребёнок (до 14 лет)"], value: f.role, err: errs.role, onChange: (e) => setF(Object.assign(Object.assign({}, f), { role: e.target.value, rodstvo: "" })) })),
+            f.role === "Член семьи" && (React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u0420\u043E\u0434\u0441\u0442\u0432\u043E", value: f.rodstvo, err: errs.rodstvo, onChange: (e) => setF(Object.assign(Object.assign({}, f), { rodstvo: e.target.value })) }))),
+            React.createElement(Banner, null, "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u0438 \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u0439 \u041A1/2 \u043F\u0440\u043E\u0445\u043E\u0434\u044F\u0442 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044E \u0441\u0430\u043C\u043E\u0441\u0442\u043E\u044F\u0442\u0435\u043B\u044C\u043D\u043E \u043F\u043E \u0441\u0441\u044B\u043B\u043A\u0435. \u0414\u0430\u043D\u043D\u044B\u0435 \u0440\u0435\u0431\u0451\u043D\u043A\u0430 \u0434\u043E 14 \u043B\u0435\u0442 \u0432\u0432\u043E\u0434\u0438\u0442 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u0438\u043A."),
+            !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" },
+                "\u0423\u043A\u0430\u0436\u0438\u0442\u0435 \u0442\u0435\u043B\u0435\u0444\u043E\u043D (11 \u0446\u0438\u0444\u0440) \u0438 \u0440\u043E\u043B\u044C",
+                f.role === "Член семьи" ? ", заполните родство" : "",
+                "."),
+            React.createElement(Btn, { onClick: submit }, "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C"))));
+}
+function UserAddedScreen({ ctx, params }) {
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { label: "\u0412\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0432 \u043C\u0435\u043D\u044E", onClick: () => ctx.goTab("usersTab") }),
+        React.createElement(ResultCard, { tone: "ok", icon: Ic.userAdd, status: "\u041F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E", title: params.phone, sub: "\u0412\u044B \u0434\u043E\u0431\u0430\u0432\u0438\u043B\u0438 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F. \u0421\u0441\u044B\u043B\u043A\u0430 \u0434\u043B\u044F \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u043F\u0440\u0438\u0434\u0451\u0442 \u0435\u043C\u0443 \u0432 \u0421\u041C\u0421 / \u0422\u0435\u043B\u0435\u0433\u0440\u0430\u043C." }),
+        React.createElement(Btn, { onClick: () => ctx.nav("userAdd", {}, true) }, "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0435\u0449\u0451"),
+        React.createElement(Btn, { kind: "ghost", style: { marginTop: 9 }, onClick: () => ctx.goTab("usersTab") }, "\u0412 \u043C\u0435\u043D\u044E")));
+}
+/* ---------- Аккаунт ---------- */
+function AccountScreen({ ctx }) {
+    const { me, role, notifications } = ctx;
+    useEffect(() => { ctx.markNotifsSeen(); }, []); // eslint-disable-line
+    return (React.createElement(React.Fragment, null,
+        React.createElement("h1", { className: "pk" }, "\u0423\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u043E\u043C"),
+        React.createElement("div", { className: "pk-item" },
+            React.createElement("div", { className: "pk-top" },
+                React.createElement("div", { className: "pk-av", style: { background: avColor(0) } }, initials(me.name)),
+                React.createElement("div", { className: "pk-info" },
+                    React.createElement("div", { className: "r" },
+                        ROLES[role].label,
+                        " \u00B7 \u041B/\u0421 ",
+                        me.ls),
+                    React.createElement("div", { className: "nm" }, me.name),
+                    React.createElement("div", { className: "ph" }, me.phone))),
+            React.createElement("div", { className: "pk-acts" },
+                React.createElement(Btn, { kind: "soft", sm: true, onClick: () => ctx.nav("accountEdit") },
+                    React.createElement(Ic.edit, { c: "var(--accent)", style: { width: 14, height: 14 } }),
+                    " \u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C"))),
+        notifications.length > 0 && (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "pk-eyebrow", style: { margin: "14px 4px 8px" } }, "\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F"),
+            notifications.map((n) => (React.createElement("div", { className: "pk-notif", key: n.id },
+                React.createElement(Ic.edit, { c: "var(--t2)", style: { width: 16, height: 16, flexShrink: 0 } }),
+                React.createElement("span", { className: "g" }, n.text),
+                React.createElement("span", { className: `pk-st ${n.ok ? "ok" : "wait"}`, style: { marginTop: 0 } }, n.status)))))),
+        React.createElement("div", { className: "pk-hr" }),
+        React.createElement(Btn, { kind: "danger", onClick: () => ctx.logout() },
+            React.createElement(Ic.out, { c: "var(--red)", style: { width: 17, height: 17 } }),
+            " \u0412\u044B\u0439\u0442\u0438 (\u0441\u043C\u0435\u043D\u0438\u0442\u044C \u0440\u043E\u043B\u044C \u2014 \u0434\u0435\u043C\u043E)"),
+        React.createElement("div", { className: "pk-note" }, "\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u0424\u0418\u041E \u0438 \u043F\u0430\u0441\u043F\u043E\u0440\u0442\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 \u043F\u0440\u043E\u0445\u043E\u0434\u0438\u0442 \u0441\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u0438\u0435 \u0432 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0449\u0435\u0439 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438")));
+}
+function AccountEditScreen({ ctx }) {
+    const [fam, name] = ctx.me.name.split(" ");
+    const [f, setF] = useState({ ls: ctx.me.ls, phone: ctx.me.phone });
+    const [errs, setErrs] = useState({});
+    const submit = () => {
+        const e = {};
+        if (f.ls.replace(/\D/g, "").length < 6)
+            e.ls = 1;
+        if (!phoneOk(f.phone))
+            e.phone = 1;
+        setErrs(e);
+        if (Object.keys(e).length)
+            return;
+        ctx.submitAccountEdit(f);
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { onClick: ctx.back }),
+        React.createElement(Card, null,
+            React.createElement(FormTitle, { sub: "\u041B\u0438\u0447\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435" }),
+            React.createElement(Field, null,
+                React.createElement(Input, { value: fam, disabled: true }),
+                React.createElement("span", { className: "pk-lock" },
+                    React.createElement(Ic.lock, { c: "var(--t3)", style: { width: 15, height: 15 } }))),
+            React.createElement(Field, null,
+                React.createElement(Input, { value: name, disabled: true }),
+                React.createElement("span", { className: "pk-lock" },
+                    React.createElement(Ic.lock, { c: "var(--t3)", style: { width: 15, height: 15 } }))),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041D\u043E\u043C\u0435\u0440 \u043B\u0438\u0446\u0435\u0432\u043E\u0433\u043E \u0441\u0447\u0451\u0442\u0430", value: f.ls, err: errs.ls, onChange: (e) => setF(Object.assign(Object.assign({}, f), { ls: e.target.value })) })),
+            React.createElement(Field, null,
+                React.createElement(Input, { placeholder: "\u041C\u043E\u0431\u0438\u043B\u044C\u043D\u044B\u0439 \u0442\u0435\u043B\u0435\u0444\u043E\u043D", value: f.phone, err: errs.phone, onChange: (e) => setF(Object.assign(Object.assign({}, f), { phone: e.target.value })) })),
+            React.createElement(Banner, null, "\u0424\u0418\u041E \u0438 \u043F\u0430\u0441\u043F\u043E\u0440\u0442\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u043F\u0440\u043E\u0441 \u0432 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0449\u0443\u044E \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u044E \u2014 \u043F\u043E\u043B\u044F \u0441 \u0437\u0430\u043C\u043A\u043E\u043C \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u044B."),
+            !!Object.keys(errs).length && React.createElement("div", { className: "pk-err" }, "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043B\u0438\u0446\u0435\u0432\u043E\u0439 \u0441\u0447\u0451\u0442 \u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D."),
+            React.createElement(Btn, { onClick: submit }, "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C"))));
+}
+function EditSentScreen({ ctx }) {
+    return (React.createElement(React.Fragment, null,
+        React.createElement(BackChip, { label: "\u0412\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0432 \u043C\u0435\u043D\u044E", onClick: () => ctx.goTab("account") }),
+        React.createElement(ResultCard, { tone: "wait", icon: Ic.clock, status: "\u0417\u0430\u043F\u0440\u043E\u0441 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D", title: "\u0414\u0430\u043D\u043D\u044B\u0435 \u043D\u0430 \u0441\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u0438\u0438", sub: "\u0414\u0430\u043D\u043D\u044B\u0435 \u043D\u0430\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u044B \u0432 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0449\u0443\u044E \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u044E \u0434\u043B\u044F \u0441\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u0438\u044F \u0438 \u0432\u043D\u0435\u0441\u0435\u043D\u0438\u044F \u0432 \u0441\u0438\u0441\u0442\u0435\u043C\u0443. \u041E\u0436\u0438\u0434\u0430\u0439\u0442\u0435 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u0439 \u043E\u0442 \u0443\u043F\u0440\u0430\u0432\u043B\u044F\u044E\u0449\u0435\u0439 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438." }),
+        React.createElement(Btn, { onClick: () => ctx.goTab("account") }, "\u0412\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0432 \u043C\u0435\u043D\u044E")));
+}
+/* ============================================================
+   Корневой компонент
+   ============================================================ */
+const TABS = {
+    owner: ["passes", "usersTab", "history", "account"],
+    family: ["passes", "history", "account"],
+    renter: ["passes", "history", "account"],
+    child: ["passes", "history", "account"],
+};
+const TAB_META = {
+    passes: { t: "Пропуска", ic: Ic.pass },
+    usersTab: { t: "Пользователи", ic: Ic.users },
+    history: { t: "История", ic: Ic.hist },
+    account: { t: "Аккаунт", ic: Ic.acc },
+};
+// какой корневой таб подсвечивать для каждого экрана
+const TAB_OF = {
+    passes: "passes", formPed: "passes", formAuto: "passes", formCargo: "passes",
+    formTemp: "passes", topup: "passes", payment: "passes", payResult: "passes",
+    result: "passes", reqDecided: "passes",
+    usersTab: "usersTab", userAdd: "usersTab", userAdded: "usersTab",
+    history: "history",
+    account: "account", accountEdit: "account", editSent: "account",
+};
+const NO_TABBAR = new Set(["start", "reg", "regDone", "payment"]);
+function PropuskaDemo() {
+    /* --- навигация --- */
+    const [stack, setStack] = useState([{ name: "start", params: {} }]);
+    const cur = stack[stack.length - 1];
+    const nav = useCallback((name, params = {}, replaceAll = false) => setStack((s) => (replaceAll ? [{ name, params }] : [...s, { name, params }])), []);
+    const back = useCallback(() => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)), []);
+    const goTab = useCallback((name, then) => {
+        setStack(then ? [{ name, params: {} }, { name: then, params: {} }] : [{ name, params: {} }]);
+    }, []);
+    /* --- данные --- */
+    const [role, setRole] = useState(null);
+    const [me, setMe] = useState({ name: NAMES.owner, phone: "+7 (999) 888-77-66", ls: "1234567" });
+    const [balance, setBalance] = useState(1500);
+    const [users, setUsers] = useState(seedUsers);
+    const [requests, setRequests] = useState(seedRequests);
+    const [history, setHistory] = useState(seedHistory);
+    const [myRequests, setMyRequests] = useState(seedMyReq);
+    const [notifications, setNotifications] = useState([]);
+    /* --- тост --- */
+    const [toastMsg, setToastMsg] = useState(null);
+    const toastTimer = useRef(null);
+    const toast = useCallback((msg) => {
+        setToastMsg(msg);
+        clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setToastMsg(null), 1900);
+    }, []);
+    /* --- часы --- */
+    const [clock, setClock] = useState("9:30");
+    useEffect(() => {
+        const tick = () => {
+            const d = new Date();
+            setClock(d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"));
+        };
+        tick();
+        const t = setInterval(tick, 15000);
+        return () => clearInterval(t);
+    }, []);
+    /* --- действия --- */
+    const loginAs = (r, then) => {
+        setRole(r);
+        setMe((m) => (Object.assign(Object.assign({}, m), { name: NAMES[r] })));
+        goTab("passes", then && r === "owner" ? undefined : undefined);
+        if (then && r === "owner")
+            setStack([{ name: "usersTab", params: {} }, { name: then, params: {} }]);
+    };
+    const logout = () => { setRole(null); nav("start", {}, true); };
+    const copyCode = (code) => {
+        var _a;
+        const done = () => toast("Код скопирован: " + code);
+        if ((_a = navigator.clipboard) === null || _a === void 0 ? void 0 : _a.writeText) {
+            navigator.clipboard.writeText(code).then(done).catch(() => toast("Код: " + code));
+        }
+        else
+            toast("Код: " + code);
+    };
+    // заказ разового/временного: собственник — сразу код, остальные — запрос собственнику
+    const placeOrder = ({ kind, title, subject, extra }) => {
+        if (role !== "owner") {
+            setRequests((r) => [...r, {
+                    id: nextId(), who: me.name, role: ROLES[role].label, kind, subject, status: "pending",
+                }]);
+            setMyRequests((r) => [{
+                    id: nextId(), date: "Сегодня", kind, title, sub: subject, st: "wait", stTxt: "Отправлен",
+                }, ...r]);
+            nav("result", { mode: "sent", kind, title, subject });
+        }
+        else {
+            const code = genCode(kind);
+            setHistory((h) => [{
+                    id: nextId(), date: "Сегодня", kind, title, sub: subject, code, st: "ok",
+                    stTxt: extra || "Активен · 24 часа",
+                }, ...h]);
+            nav("result", { mode: "done", kind, title, subject, code, extra });
+        }
+    };
+    // грузовой: списываем депозит, код сразу (для всех, у кого есть доступ)
+    const placeCargo = (subject) => {
+        const code = genCode("cargo");
+        setBalance((b) => b - CARGO_PRICE);
+        setHistory((h) => [{
+                id: nextId(), date: "Сегодня", kind: "cargo", title: "Грузовой пропуск", sub: subject,
+                code, st: "ok", stTxt: "Оплачен · 1 500 ₽ · действителен 24 часа",
+            }, ...h]);
+        nav("result", {
+            mode: "done", kind: "cargo", title: "Грузовой пропуск", subject, code,
+            extra: "действителен 24 часа",
+        });
+    };
+    const decideRequest = (id, ok) => {
+        const req = requests.find((r) => r.id === id);
+        if (!req)
+            return;
+        setRequests((rs) => rs.map((r) => (r.id === id ? Object.assign(Object.assign({}, r), { status: ok ? "approved" : "rejected" }) : r)));
+        if (ok) {
+            setHistory((h) => [{
+                    id: nextId(), date: "Сегодня", kind: req.kind,
+                    title: `${KIND_NAME[req.kind]} пропуск (по запросу)`, sub: req.subject,
+                    code: genCode(req.kind), st: "ok", stTxt: `Одобрен · запросил(а) ${req.who}`,
+                }, ...h]);
+        }
+        nav("reqDecided", { ok, req });
+    };
+    const paymentDone = (sum, ok) => {
+        if (ok) {
+            const newBalance = balance + sum;
+            setBalance(newBalance);
+            nav("payResult", { ok: true, sum, balance: newBalance }, true);
+        }
+        else {
+            nav("payResult", { ok: false, sum }, true);
+        }
+    };
+    const toggleUser = (id) => {
+        setUsers((us) => us.map((u) => {
+            if (u.id !== id)
+                return u;
+            toast(u.on ? `${u.name}: оформление отключено` : `${u.name}: оформление включено`);
+            return Object.assign(Object.assign({}, u), { on: !u.on });
+        }));
+    };
+    const removeUser = (id) => {
+        setUsers((us) => us.filter((u) => u.id !== id));
+        toast("Пользователь удалён");
+    };
+    const addUser = (f) => {
+        const pool = ["Ольга Смирнова", "Дмитрий Козлов", "Анна Петрова", "Сергей Волков"];
+        setUsers((us) => [...us, {
+                id: nextId(), role: f.role.replace(" (до 14 лет)", ""),
+                name: pool[us.length % pool.length], phone: f.phone.trim(), ls: me.ls, on: true, req: 0,
+            }]);
+        nav("userAdded", { phone: f.phone.trim() });
+    };
+    const submitAccountEdit = (f) => {
+        setMe((m) => (Object.assign(Object.assign({}, m), { ls: f.ls, phone: f.phone })));
+        const nid = nextId();
+        setNotifications((ns) => [{ id: nid, text: "Изменение данных", status: "На согласовании", ok: false, seen: false }, ...ns]);
+        setTimeout(() => {
+            setNotifications((ns) => ns.map((n) => (n.id === nid ? Object.assign(Object.assign({}, n), { status: "Согласовано", ok: true, seen: false }) : n)));
+            toast("УК согласовала изменения (демо)");
+        }, 4500);
+        nav("editSent");
+    };
+    const markNotifsSeen = () => setNotifications((ns) => ns.some((n) => !n.seen) ? ns.map((n) => (Object.assign(Object.assign({}, n), { seen: true }))) : ns);
+    /* --- контекст для экранов --- */
+    const ctx = {
+        role, me, balance, users, requests, history, myRequests, notifications,
+        nav, back, goTab, toast, copyCode,
+        loginAs, logout, placeOrder, placeCargo, decideRequest, paymentDone,
+        toggleUser, removeUser, addUser, submitAccountEdit, markNotifsSeen,
+    };
+    /* --- выбор экрана --- */
+    const SCREEN = {
+        start: React.createElement(StartScreen, { ctx: ctx }),
+        reg: React.createElement(RegScreen, { ctx: ctx }),
+        regDone: React.createElement(RegDoneScreen, { ctx: ctx, params: cur.params }),
+        passes: React.createElement(PassesScreen, { ctx: ctx }),
+        formPed: React.createElement(FormPed, { ctx: ctx }),
+        formAuto: React.createElement(FormAuto, { ctx: ctx }),
+        formCargo: React.createElement(FormAuto, { ctx: ctx, cargo: true }),
+        formTemp: React.createElement(FormTemp, { ctx: ctx }),
+        result: React.createElement(ResultScreen, { ctx: ctx, params: cur.params }),
+        reqDecided: React.createElement(ReqDecidedScreen, { ctx: ctx, params: cur.params }),
+        topup: React.createElement(TopupScreen, { ctx: ctx }),
+        payment: React.createElement(PaymentScreen, { ctx: ctx, params: cur.params }),
+        payResult: React.createElement(PayResultScreen, { ctx: ctx, params: cur.params }),
+        history: React.createElement(HistoryScreen, { ctx: ctx }),
+        usersTab: React.createElement(UsersScreen, { ctx: ctx }),
+        userAdd: React.createElement(UserAddScreen, { ctx: ctx }),
+        userAdded: React.createElement(UserAddedScreen, { ctx: ctx, params: cur.params }),
+        account: React.createElement(AccountScreen, { ctx: ctx }),
+        accountEdit: React.createElement(AccountEditScreen, { ctx: ctx }),
+        editSent: React.createElement(EditSentScreen, { ctx: ctx }),
+    }[cur.name];
+    const showTabbar = role && !NO_TABBAR.has(cur.name);
+    const pendingCount = requests.filter((r) => r.status === "pending").length;
+    const unseenNotifs = notifications.filter((n) => !n.seen).length;
+    const badges = { passes: role === "owner" ? pendingCount : 0, account: unseenNotifs, usersTab: 0, history: 0 };
+    return (React.createElement("div", { className: "pk-root" },
+        React.createElement("style", null, CSS),
+        React.createElement("div", { className: "pk-stage" },
+            React.createElement("div", { className: "pk-phone" },
+                React.createElement("div", { className: "pk-status" },
+                    React.createElement("span", null, clock),
+                    React.createElement("span", null, "\u25AE\u25AE\u25AE \u23FB")),
+                React.createElement("div", { className: "pk-tgbar" },
+                    React.createElement("button", { className: "pk-chip", onClick: () => {
+                            const tg = typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp;
+                            if (tg && tg.initData)
+                                tg.close();
+                            else
+                                nav("start", {}, true);
+                        } }, "\u2715 \u0417\u0430\u043A\u0440\u044B\u0442\u044C"),
+                    React.createElement("div", { style: { display: "flex", gap: 8 } },
+                        React.createElement("span", { className: "pk-chip" }, "\u2304"),
+                        React.createElement("span", { className: "pk-chip" }, "\u2022\u2022\u2022"))),
+                React.createElement("div", { className: `pk-screen ${showTabbar ? "" : "bare"}`, key: stack.length + cur.name },
+                    React.createElement("div", { className: "pk-fade" }, SCREEN)),
+                showTabbar && (React.createElement("div", { className: "pk-tabbar" }, TABS[role].map((id) => {
+                    const m = TAB_META[id];
+                    const IconC = m.ic;
+                    const active = TAB_OF[cur.name] === id;
+                    return (React.createElement("button", { key: id, className: `pk-tab ${active ? "on" : ""}`, onClick: () => goTab(id) },
+                        badges[id] > 0 && React.createElement("span", { className: "bdg" }, badges[id]),
+                        React.createElement(IconC, null),
+                        React.createElement("span", null, m.t)));
+                }))),
+                React.createElement("div", { className: `pk-toast ${toastMsg ? "show" : ""}` }, toastMsg)))));
+}
+
+// --- Монтирование приложения ---
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(PropuskaDemo));
+</script>
+</body>
+</html>
