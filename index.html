@@ -64,17 +64,13 @@ const CSS = `
 @media(min-width:560px){.pk-stage{padding:28px 0;align-items:center}}
 .pk-phone{width:100%;max-width:400px;background:var(--bg);display:flex;flex-direction:column;
   position:relative;overflow:hidden;height:100vh}
-@media(min-width:560px){.pk-phone{height:min(830px,calc(100vh - 56px));border-radius:34px;
-  border:1px solid #23262c;box-shadow:0 32px 90px rgba(0,0,0,.75),0 0 0 7px #0d0e11}}
-.pk-status{display:flex;justify-content:space-between;padding:11px 20px 2px;
-  font-size:13px;font-weight:600;flex-shrink:0}
-.pk-status span:last-child{color:var(--t2);font-size:11px;letter-spacing:2px}
-.pk-tgbar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;flex-shrink:0}
+@media(min-width:560px){.pk-phone{height:min(830px,calc(100vh - 56px));border-radius:20px;
+  border:1px solid #22242a;box-shadow:0 24px 70px rgba(0,0,0,.6)}}
 .pk-chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);
   border:1px solid var(--stroke);border-radius:999px;padding:6px 12px;font-size:13px;
   color:var(--t2);cursor:pointer;user-select:none;border:none;font-family:inherit}
 .pk-chip:active{opacity:.65}
-.pk-screen{flex:1;overflow-y:auto;padding:6px 16px 100px;scrollbar-width:none}
+.pk-screen{flex:1;overflow-y:auto;padding:14px 16px 100px;scrollbar-width:none}
 .pk-screen::-webkit-scrollbar{display:none}
 .pk-screen.bare{padding-bottom:28px}
 .pk-fade{animation:pkF .22s ease}
@@ -1072,17 +1068,6 @@ function PropuskaDemo() {
         clearTimeout(toastTimer.current);
         toastTimer.current = setTimeout(() => setToastMsg(null), 1900);
     }, []);
-    /* --- часы --- */
-    const [clock, setClock] = useState("9:30");
-    useEffect(() => {
-        const tick = () => {
-            const d = new Date();
-            setClock(d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"));
-        };
-        tick();
-        const t = setInterval(tick, 15000);
-        return () => clearInterval(t);
-    }, []);
     /* --- действия --- */
     const loginAs = (r, then) => {
         setRole(r);
@@ -1227,20 +1212,6 @@ function PropuskaDemo() {
         React.createElement("style", null, CSS),
         React.createElement("div", { className: "pk-stage" },
             React.createElement("div", { className: "pk-phone" },
-                React.createElement("div", { className: "pk-status" },
-                    React.createElement("span", null, clock),
-                    React.createElement("span", null, "\u25AE\u25AE\u25AE \u23FB")),
-                React.createElement("div", { className: "pk-tgbar" },
-                    React.createElement("button", { className: "pk-chip", onClick: () => {
-                            const tg = typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp;
-                            if (tg && tg.initData)
-                                tg.close();
-                            else
-                                nav("start", {}, true);
-                        } }, "\u2715 \u0417\u0430\u043A\u0440\u044B\u0442\u044C"),
-                    React.createElement("div", { style: { display: "flex", gap: 8 } },
-                        React.createElement("span", { className: "pk-chip" }, "\u2304"),
-                        React.createElement("span", { className: "pk-chip" }, "\u2022\u2022\u2022"))),
                 React.createElement("div", { className: `pk-screen ${showTabbar ? "" : "bare"}`, key: stack.length + cur.name },
                     React.createElement("div", { className: "pk-fade" }, SCREEN)),
                 showTabbar && (React.createElement("div", { className: "pk-tabbar" }, TABS[role].map((id) => {

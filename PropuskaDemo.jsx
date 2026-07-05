@@ -22,17 +22,13 @@ const CSS = `
 @media(min-width:560px){.pk-stage{padding:28px 0;align-items:center}}
 .pk-phone{width:100%;max-width:400px;background:var(--bg);display:flex;flex-direction:column;
   position:relative;overflow:hidden;height:100vh}
-@media(min-width:560px){.pk-phone{height:min(830px,calc(100vh - 56px));border-radius:34px;
-  border:1px solid #23262c;box-shadow:0 32px 90px rgba(0,0,0,.75),0 0 0 7px #0d0e11}}
-.pk-status{display:flex;justify-content:space-between;padding:11px 20px 2px;
-  font-size:13px;font-weight:600;flex-shrink:0}
-.pk-status span:last-child{color:var(--t2);font-size:11px;letter-spacing:2px}
-.pk-tgbar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;flex-shrink:0}
+@media(min-width:560px){.pk-phone{height:min(830px,calc(100vh - 56px));border-radius:20px;
+  border:1px solid #22242a;box-shadow:0 24px 70px rgba(0,0,0,.6)}}
 .pk-chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);
   border:1px solid var(--stroke);border-radius:999px;padding:6px 12px;font-size:13px;
   color:var(--t2);cursor:pointer;user-select:none;border:none;font-family:inherit}
 .pk-chip:active{opacity:.65}
-.pk-screen{flex:1;overflow-y:auto;padding:6px 16px 100px;scrollbar-width:none}
+.pk-screen{flex:1;overflow-y:auto;padding:14px 16px 100px;scrollbar-width:none}
 .pk-screen::-webkit-scrollbar{display:none}
 .pk-screen.bare{padding-bottom:28px}
 .pk-fade{animation:pkF .22s ease}
@@ -1152,18 +1148,6 @@ export default function PropuskaDemo() {
     toastTimer.current = setTimeout(() => setToastMsg(null), 1900);
   }, []);
 
-  /* --- часы --- */
-  const [clock, setClock] = useState("9:30");
-  useEffect(() => {
-    const tick = () => {
-      const d = new Date();
-      setClock(d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"));
-    };
-    tick();
-    const t = setInterval(tick, 15000);
-    return () => clearInterval(t);
-  }, []);
-
   /* --- действия --- */
   const loginAs = (r, then) => {
     setRole(r);
@@ -1313,16 +1297,6 @@ export default function PropuskaDemo() {
       <style>{CSS}</style>
       <div className="pk-stage">
         <div className="pk-phone">
-          <div className="pk-status"><span>{clock}</span><span>▮▮▮ ⏻</span></div>
-          <div className="pk-tgbar">
-            <button className="pk-chip" onClick={() => {
-              const tg = typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp;
-              if (tg && tg.initData) tg.close(); else nav("start", {}, true);
-            }}>✕ Закрыть</button>
-            <div style={{ display: "flex", gap: 8 }}>
-              <span className="pk-chip">⌄</span><span className="pk-chip">•••</span>
-            </div>
-          </div>
           <div className={`pk-screen ${showTabbar ? "" : "bare"}`} key={stack.length + cur.name}>
             <div className="pk-fade">{SCREEN}</div>
           </div>
